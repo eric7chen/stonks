@@ -9,7 +9,8 @@ import datetime
 import sys
 import signal
 
-# global df
+global bought
+bought = False
 
 
 class Stonks():
@@ -29,8 +30,6 @@ class Stonks():
 
         self.df = pd.read_csv(ticker + '.csv')
 
-        self.buy()
-        self.sell()
         while True:
             print("New Entry...")
             new_entry = {"Date/Time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -58,18 +57,22 @@ class Stonks():
         lop = {"21": 0, "50": 0, "100": 0, "250": 0}
         # short now greater than long but was less
         if self.df.iloc[-1]["9"] > self.df.iloc[-1]["21"] and self.df.iloc[-2]["9"] < self.df.iloc[-2]["21"]:
-            print("BUY")
+            print("BUY" + self.td_client.get_price_history(
+                symbol=self.ticker, frequency_type="minute", frequency=1, period_type="day").get("candles")[-1:][0].get('open'))
+            # self.buy()
         # short now less than long but was greater
-        elif self.df.iloc[-1]["9"] < self.df.iloc[-1]["21"] and self.df.iloc[-2]["9"] > self.df.iloc[-2]["21"]:
-            print("SELL")
+        elif self.df.iloc[-1]["9"] < self.df.iloc[-1]["21"] and self.df.iloc[-2]["9"] > self.df.iloc[-2]["21"] and bought is True:
+            print("SELL" + self.td_client.get_price_history(
+                symbol=self.ticker, frequency_type="minute", frequency=1, period_type="day").get("candles")[-1:][0].get('open'))
+            # self.sell()
 
     def buy(self):
         buy_order = {
             "orderType": "MARKET",
             "session": "NORMAL",
             "duration": "DAY",
-            "price": self.td_client.get_price_history(
-                symbol=self.ticker, frequency_type="minute", frequency=1, period_type="day").get("candles")[-1:][0].get('open'),
+            # "price": self.td_client.get_price_history(
+            #     symbol=self.ticker, frequency_type="minute", frequency=1, period_type="day").get("candles")[-1:][0].get('open'),
             "orderStrategyType": "SINGLE",
             "orderLegCollection": [
                 {
@@ -82,15 +85,27 @@ class Stonks():
                 }
             ]
         }
-        self.td_client.place_order(account=ACCOUNT_NUM, order=buy_order)
+        buying = self.td_client.place_order(
+            account=ACCOUNT_NUM, order=buy_order)
+
+        print("Waiting 30 seconds to fulfill order...")
+        time.sleep(30)
+
+        if self.td_client.get_orders(account=ACCOUNT_NUM, order_id=buying.get("orderId")).get("status") == "FILLED":
+            bought = True
+        else:
+            print("30 seconds have passed. Canceling order.")
+            self.td_client.cancel_order(
+                account=ACCOUNT_NUM, order_id=buying.get("orderId"))
 
     def sell(self):
+        self.td_client.get_orders()
         sell_order = {
             "orderType": "MARKET",
             "session": "NORMAL",
             "duration": "DAY",
-            "price": self.td_client.get_price_history(
-                symbol=self.ticker, frequency_type="minute", frequency=1, period_type="day").get("candles")[-1:][0].get('open'),
+            # "price": self.td_client.get_price_history(
+            #     symbol=self.ticker, frequency_type="minute", frequency=1, period_type="day").get("candles")[-1:][0].get('open'),
             "orderStrategyType": "SINGLE",
             "orderLegCollection": [
                 {
@@ -104,6 +119,7 @@ class Stonks():
             ]
         }
         self.td_client.place_order(account=ACCOUNT_NUM, order=sell_order)
+        bought = False
 
 
 def main():
